@@ -6,104 +6,128 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Filter, Star, Play, Clock, TrendingUp, Zap } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import AutomationCard from "@/components/AutomationCard";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Automation {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  rating: number;
+  total_executions: number;
+  setup_time_minutes: number;
+  is_featured: boolean;
+  category: {
+    name: string;
+  };
+}
+
+interface Category {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
 
 const Marketplace = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("featured");
 
-  const categories = [
-    { id: "all", label: "All Categories" },
-    { id: "marketing", label: "Marketing" },
-    { id: "analytics", label: "Analytics" },
-    { id: "support", label: "Customer Support" },
-    { id: "sales", label: "Sales" },
-    { id: "hr", label: "Human Resources" },
-    { id: "finance", label: "Finance" },
-    { id: "operations", label: "Operations" },
-  ];
-
-  const automations = [
-    {
-      title: "Email Campaign Optimizer",
-      description: "Automatically optimize email campaigns using AI-driven A/B testing and personalization to increase open rates by up to 40%",
-      price: "$29/month",
-      rating: 4.9,
-      executions: "50K+",
-      category: "Marketing"
-    },
-    {
-      title: "Data Analysis Assistant",
-      description: "Transform raw data into actionable insights with automated reporting, visualization, and trend analysis",
-      price: "$49/month",
-      rating: 4.8,
-      executions: "75K+",
-      category: "Analytics"
-    },
-    {
-      title: "Customer Support Bot",
-      description: "Intelligent chatbot that handles customer inquiries, provides instant responses, and escalates complex issues",
-      price: "$39/month",
-      rating: 4.7,
-      executions: "100K+",
-      category: "Support"
-    },
-    {
-      title: "Lead Scoring Engine",
-      description: "Automatically score and prioritize leads based on behavior, demographics, and engagement patterns",
-      price: "$35/month",
-      rating: 4.6,
-      executions: "25K+",
-      category: "Sales"
-    },
-    {
-      title: "Invoice Processing Bot",
-      description: "Extract data from invoices, validate information, and automatically update accounting systems",
-      price: "$45/month",
-      rating: 4.8,
-      executions: "30K+",
-      category: "Finance"
-    },
-    {
-      title: "Social Media Manager",
-      description: "Schedule posts, analyze engagement, and optimize content across multiple social media platforms",
-      price: "$25/month",
-      rating: 4.5,
-      executions: "60K+",
-      category: "Marketing"
-    },
-    {
-      title: "Resume Screening AI",
-      description: "Automatically screen resumes, match candidates to job requirements, and rank applicants",
-      price: "$55/month",
-      rating: 4.7,
-      executions: "15K+",
-      category: "HR"
-    },
-    {
-      title: "Inventory Optimizer",
-      description: "Predict demand, optimize stock levels, and automate reordering based on historical data and trends",
-      price: "$65/month",
-      rating: 4.9,
-      executions: "20K+",
-      category: "Operations"
-    },
-    {
-      title: "Content Generator",
-      description: "Generate high-quality blog posts, product descriptions, and marketing copy using advanced AI",
-      price: "$19/month",
-      rating: 4.4,
-      executions: "85K+",
-      category: "Marketing"
+  // Fetch categories
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('automation_categories')
+        .select('*')
+        .order('name');
+        
+      if (error) {
+        console.error('Error fetching categories:', error);
+        return [];
+      }
+      
+      return data || [];
     }
+  });
+
+  // Fetch automations
+  const { data: automations = [] } = useQuery({
+    queryKey: ['automations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('automations')
+        .select(`
+          *,
+          automation_categories!inner(name)
+        `)
+        .order('is_featured', { ascending: false })
+        .order('total_executions', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching automations:', error);
+        return [];
+      }
+      
+      return data?.map(automation => ({
+        id: automation.id,
+        title: automation.title,
+        description: automation.description,
+        price: automation.price,
+        rating: automation.rating,
+        total_executions: automation.total_executions,
+        setup_time_minutes: automation.setup_time_minutes,
+        is_featured: automation.is_featured,
+        category: {
+          name: automation.automation_categories.name
+        }
+      })) || [];
+    }
+  });
+
+  const categoryOptions = [
+    { id: "all", label: "All Categories" },
+    ...categories.map(cat => ({ id: cat.id, label: cat.name }))
   ];
 
   const filteredAutomations = automations.filter(automation => {
     const matchesSearch = automation.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          automation.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === "all" || 
-                           automation.category.toLowerCase() === selectedCategory;
+                           categories.find(cat => cat.id === selectedCategory)?.name === automation.category.name;
     return matchesSearch && matchesCategory;
   });
+
+  const sortedAutomations = [...filteredAutomations].sort((a, b) => {
+    switch (sortBy) {
+      case 'popular':
+        return b.total_executions - a.total_executions;
+      case 'rating':
+        return b.rating - a.rating;
+      case 'price-low':
+        return a.price - b.price;
+      case 'price-high':
+        return b.price - a.price;
+      case 'featured':
+      default:
+        if (a.is_featured && !b.is_featured) return -1;
+        if (!a.is_featured && b.is_featured) return 1;
+        return b.total_executions - a.total_executions;
+    }
+  });
+
+  const formatPrice = (price: number) => {
+    return price === 0 ? "Free" : `$${price.toFixed(2)}/month`;
+  };
+
+  const formatExecutions = (executions: number) => {
+    if (executions >= 1000) {
+      return `${(executions / 1000).toFixed(1)}K+`;
+    }
+    return `${executions}+`;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -146,7 +170,7 @@ const Marketplace = () => {
               </h3>
               
               <div className="space-y-2">
-                {categories.map((category) => (
+                {categoryOptions.map((category) => (
                   <button
                     key={category.id}
                     onClick={() => setSelectedCategory(category.id)}
@@ -167,15 +191,17 @@ const Marketplace = () => {
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Automations</span>
-                    <span className="font-medium">2,500+</span>
+                    <span className="font-medium">{automations.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Active Users</span>
-                    <span className="font-medium">15K+</span>
+                    <span className="text-gray-600">Categories</span>
+                    <span className="font-medium">{categories.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Success Rate</span>
-                    <span className="font-medium text-emerald-600">98.5%</span>
+                    <span className="text-gray-600">Featured</span>
+                    <span className="font-medium text-emerald-600">
+                      {automations.filter(a => a.is_featured).length}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -188,19 +214,27 @@ const Marketplace = () => {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-2xl font-semibold text-gray-900">
-                  {filteredAutomations.length} Automations Found
+                  {sortedAutomations.length} Automations Found
                 </h2>
                 <p className="text-gray-600">
-                  {selectedCategory !== "all" && `in ${categories.find(c => c.id === selectedCategory)?.label}`}
+                  {selectedCategory !== "all" && `in ${categoryOptions.find(c => c.id === selectedCategory)?.label}`}
                 </p>
               </div>
               
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant={sortBy === 'popular' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setSortBy('popular')}
+                >
                   <TrendingUp className="h-4 w-4 mr-2" />
                   Most Popular
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant={sortBy === 'rating' ? 'default' : 'outline'} 
+                  size="sm"
+                  onClick={() => setSortBy('rating')}
+                >
                   <Star className="h-4 w-4 mr-2" />
                   Highest Rated
                 </Button>
@@ -209,22 +243,21 @@ const Marketplace = () => {
 
             {/* Automation Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredAutomations.map((automation, index) => (
-                <AutomationCard key={index} {...automation} />
+              {sortedAutomations.map((automation) => (
+                <AutomationCard 
+                  key={automation.id}
+                  title={automation.title}
+                  description={automation.description}
+                  price={formatPrice(automation.price)}
+                  rating={automation.rating || 0}
+                  executions={formatExecutions(automation.total_executions || 0)}
+                  category={automation.category.name}
+                />
               ))}
             </div>
 
-            {/* Load More */}
-            {filteredAutomations.length > 0 && (
-              <div className="text-center mt-12">
-                <Button variant="outline" size="lg" className="px-8">
-                  Load More Automations
-                </Button>
-              </div>
-            )}
-
             {/* No Results */}
-            {filteredAutomations.length === 0 && (
+            {sortedAutomations.length === 0 && (
               <div className="text-center py-12">
                 <Zap className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">No automations found</h3>

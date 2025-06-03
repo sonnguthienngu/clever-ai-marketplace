@@ -1,10 +1,26 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Zap, LogOut, User, BarChart3, Settings, Plus } from 'lucide-react';
+import { Zap, LogOut, User, BarChart3, Settings, Plus, Clock, TrendingUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+
+interface UserAnalytics {
+  total_executions: number;
+  total_time_saved_minutes: number;
+  last_active: string;
+}
+
+interface RecentExecution {
+  id: string;
+  automation_title: string;
+  status: string;
+  created_at: string;
+  execution_time_ms: number | null;
+}
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
@@ -28,10 +44,102 @@ const Dashboard = () => {
     }
   };
 
+  // Fetch user analytics
+  const { data: analytics } = useQuery({
+    queryKey: ['user-analytics', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      
+      const { data, error } = await supabase
+        .from('user_analytics')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching analytics:', error);
+        return null;
+      }
+      
+      return data;
+    },
+    enabled: !!user?.id
+  });
+
+  // Fetch recent executions
+  const { data: recentExecutions } = useQuery({
+    queryKey: ['recent-executions', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('automation_executions')
+        .select(`
+          id,
+          status,
+          created_at,
+          execution_time_ms,
+          automations!inner(title)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+        
+      if (error) {
+        console.error('Error fetching executions:', error);
+        return [];
+      }
+      
+      return data?.map(execution => ({
+        id: execution.id,
+        automation_title: execution.automations.title,
+        status: execution.status,
+        created_at: execution.created_at,
+        execution_time_ms: execution.execution_time_ms
+      })) || [];
+    },
+    enabled: !!user?.id
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-green-500';
+      case 'running': return 'bg-blue-500';
+      case 'failed': return 'bg-red-500';
+      default: return 'bg-yellow-500';
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+    return `${Math.floor(diffInMinutes / 1440)} days ago`;
+  };
+
   const statsCards = [
-    { title: 'Active Automations', value: '12', icon: Zap, color: 'text-emerald-600' },
-    { title: 'Executions Today', value: '1,247', icon: BarChart3, color: 'text-blue-600' },
-    { title: 'Time Saved', value: '34h', icon: Settings, color: 'text-purple-600' },
+    { 
+      title: 'Total Executions', 
+      value: analytics?.total_executions?.toString() || '0', 
+      icon: Zap, 
+      color: 'text-emerald-600' 
+    },
+    { 
+      title: 'Time Saved', 
+      value: `${analytics?.total_time_saved_minutes || 0}m`, 
+      icon: Clock, 
+      color: 'text-blue-600' 
+    },
+    { 
+      title: 'Active Today', 
+      value: analytics?.last_active ? '1' : '0', 
+      icon: TrendingUp, 
+      color: 'text-purple-600' 
+    },
   ];
 
   return (
@@ -99,9 +207,12 @@ const Dashboard = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200 mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Button className="h-24 flex flex-col items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700">
+            <Button 
+              className="h-24 flex flex-col items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => navigate('/marketplace')}
+            >
               <Plus className="h-6 w-6" />
-              <span>New Automation</span>
+              <span>Browse Automations</span>
             </Button>
             
             <Button variant="outline" className="h-24 flex flex-col items-center justify-center gap-2">
@@ -111,7 +222,7 @@ const Dashboard = () => {
             
             <Button variant="outline" className="h-24 flex flex-col items-center justify-center gap-2" onClick={() => navigate('/marketplace')}>
               <Zap className="h-6 w-6" />
-              <span>Browse Marketplace</span>
+              <span>Featured Automations</span>
             </Button>
             
             <Button variant="outline" className="h-24 flex flex-col items-center justify-center gap-2">
@@ -125,29 +236,31 @@ const Dashboard = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
           <div className="space-y-4">
-            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">Email Campaign Optimizer executed successfully</p>
-                <p className="text-sm text-gray-600">2 minutes ago</p>
+            {recentExecutions && recentExecutions.length > 0 ? (
+              recentExecutions.map((execution) => (
+                <div key={execution.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(execution.status)}`}></div>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">
+                      {execution.automation_title} {execution.status === 'completed' ? 'completed' : execution.status}
+                    </p>
+                    <p className="text-sm text-gray-600">{formatTimeAgo(execution.created_at)}</p>
+                  </div>
+                  {execution.execution_time_ms && (
+                    <div className="text-sm text-gray-500">
+                      {(execution.execution_time_ms / 1000).toFixed(1)}s
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No recent activity</p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Deploy an automation from the marketplace to get started
+                </p>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">Data Analysis Assistant completed report</p>
-                <p className="text-sm text-gray-600">15 minutes ago</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">Customer Support Bot handled 47 inquiries</p>
-                <p className="text-sm text-gray-600">1 hour ago</p>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </main>

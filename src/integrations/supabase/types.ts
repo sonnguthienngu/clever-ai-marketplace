@@ -9,6 +9,127 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      automation_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      automation_executions: {
+        Row: {
+          automation_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          result_data: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          automation_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          result_data?: Json | null
+          status: string
+          user_id: string
+        }
+        Update: {
+          automation_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          result_data?: Json | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_executions_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automations: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_featured: boolean | null
+          price: number
+          rating: number | null
+          setup_time_minutes: number | null
+          title: string
+          total_executions: number | null
+          updated_at: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_featured?: boolean | null
+          price?: number
+          rating?: number | null
+          setup_time_minutes?: number | null
+          title: string
+          total_executions?: number | null
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_featured?: boolean | null
+          price?: number
+          rating?: number | null
+          setup_time_minutes?: number | null
+          title?: string
+          total_executions?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automations_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "automation_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -35,6 +156,47 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      user_analytics: {
+        Row: {
+          created_at: string
+          favorite_category_id: string | null
+          id: string
+          last_active: string | null
+          total_executions: number | null
+          total_time_saved_minutes: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          favorite_category_id?: string | null
+          id?: string
+          last_active?: string | null
+          total_executions?: number | null
+          total_time_saved_minutes?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          favorite_category_id?: string | null
+          id?: string
+          last_active?: string | null
+          total_executions?: number | null
+          total_time_saved_minutes?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_analytics_favorite_category_id_fkey"
+            columns: ["favorite_category_id"]
+            isOneToOne: false
+            referencedRelation: "automation_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
