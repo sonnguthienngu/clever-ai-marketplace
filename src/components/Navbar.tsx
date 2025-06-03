@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Zap, Menu, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user } = useAuth();
 
   return (
     <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
@@ -35,12 +37,26 @@ const Navbar = () => {
 
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button variant="ghost" className="text-gray-600 hover:text-gray-900">
-              Sign In
-            </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Sign Up
-            </Button>
+            {user ? (
+              <Link to="/dashboard">
+                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/auth">
+                  <Button variant="ghost" className="text-gray-600 hover:text-gray-900">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/auth">
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                    Sign Up
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -89,12 +105,26 @@ const Navbar = () => {
                 Support
               </a>
               <div className="flex flex-col space-y-2 pt-4 border-t border-gray-200">
-                <Button variant="ghost" className="text-gray-600 hover:text-gray-900 justify-start">
-                  Sign In
-                </Button>
-                <Button className="bg-emerald-600 hover:bg-emerald-700 text-white justify-start">
-                  Sign Up
-                </Button>
+                {user ? (
+                  <Link to="/dashboard" onClick={() => setIsMenuOpen(false)}>
+                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white justify-start">
+                      Dashboard
+                    </Button>
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                      <Button variant="ghost" className="text-gray-600 hover:text-gray-900 justify-start">
+                        Sign In
+                      </Button>
+                    </Link>
+                    <Link to="/auth" onClick={() => setIsMenuOpen(false)}>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700 text-white justify-start">
+                        Sign Up
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>
